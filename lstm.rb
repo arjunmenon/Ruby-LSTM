@@ -21,10 +21,10 @@ def rand_arr(a, b, *args)
 end
 
 class LstmParam
-	attr_accessor :mem_cell_ct, :x_dim, :wg, :wi, :wf, :wo, :bg, :bi, :bf, :bo, :wg_diff, :wi_diff, :wf_diff, :wo_diff, 
+    attr_accessor :mem_cell_ct, :x_dim, :wg, :wi, :wf, :wo, :bg, :bi, :bf, :bo, :wg_diff, :wi_diff, :wf_diff, :wo_diff, 
 					:bg_diff, :bi_diff, :bf_diff, :bo_diff
-	def initialize(mem_cell_ct, x_dim)
-		@mem_cell_ct = mem_cell_ct
+    def initialize(mem_cell_ct, x_dim)
+	@mem_cell_ct = mem_cell_ct
         @x_dim = x_dim
         puts @concat_len = x_dim + mem_cell_ct
 
@@ -48,10 +48,10 @@ class LstmParam
         @bg_diff = Numo::DFloat.zeros(@mem_cell_ct) 
         @bi_diff = Numo::DFloat.zeros(@mem_cell_ct) 
         @bf_diff = Numo::DFloat.zeros(@mem_cell_ct) 
-		@bo_diff = Numo::DFloat.zeros(@mem_cell_ct) 
-	end
+	@bo_diff = Numo::DFloat.zeros(@mem_cell_ct) 
+    end
 
-	def apply_diff(lr = 1)
+    def apply_diff(lr = 1)
         @wg -= lr * @wg_diff
         @wi -= lr * @wi_diff
         @wf -= lr * @wf_diff
@@ -69,12 +69,12 @@ class LstmParam
         @bg_diff = @bg.new_zeros
         @bi_diff = @bi.new_zeros 
         @bf_diff = @bf.new_zeros 
-		@bo_diff = @bo.new_zeros 
-	end
+	@bo_diff = @bo.new_zeros 
+    end
 end
 
 class LstmState
-	attr_accessor :g, :i, :f, :o, :s, :h, :bottom_diff_h, :bottom_diff_s
+    attr_accessor :g, :i, :f, :o, :s, :h, :bottom_diff_h, :bottom_diff_s
     def initialize(mem_cell_ct, _x_dim)
         @g = Numo::DFloat.zeros(mem_cell_ct)
         @i = Numo::DFloat.zeros(mem_cell_ct)
@@ -83,23 +83,23 @@ class LstmState
         @s = Numo::DFloat.zeros(mem_cell_ct)
         @h = Numo::DFloat.zeros(mem_cell_ct)
         @bottom_diff_h = @h.new_zeros
-		@bottom_diff_s = @s.new_zeros
-	end
+	@bottom_diff_s = @s.new_zeros
+    end
 end
 
 class LstmNode
-	attr_accessor :state, :param, :xc, :s_prev, :h_prev
+    attr_accessor :state, :param, :xc, :s_prev, :h_prev
     def initialize(lstm_param, lstm_state)
         # store reference to parameters and to activations
         @state = lstm_state
         @param = lstm_param
         # non-recurrent input concatenated with recurrent input
-		@xc = nil
-	end
+	@xc = nil
+    end
 
-	def bottom_data_is(x, s_prev = nil, h_prev = nil)
+    def bottom_data_is(x, s_prev = nil, h_prev = nil)
         # if this is the first lstm node in the network
-        if s_prev.nil? then	s_prev = @state.s.new_zeros end
+        if s_prev.nil? then s_prev = @state.s.new_zeros end
         if h_prev.nil? then h_prev = @state.h.new_zeros end
         
         # save data for use in backprop
@@ -108,15 +108,15 @@ class LstmNode
 
         # concatenate x(t) and h(t-1)
         xc = Numo::NArray.hstack([x, h_prev])
-         @state.g = Numo::NMath.tanh((@param.wg.dot xc) + @param.bg)
+        @state.g = Numo::NMath.tanh((@param.wg.dot xc) + @param.bg)
         @state.i = sigmoid((@param.wi.dot xc) + @param.bi)
         @state.f = sigmoid((@param.wf.dot xc) + @param.bf)
         @state.o = sigmoid((@param.wo.dot xc) + @param.bo)
         @state.s = @state.g * @state.i + s_prev * @state.f
         @state.h = @state.s * @state.o
 
-		@xc = xc
-	end
+	@xc = xc
+    end
 
     def top_diff_is(top_diff_h, top_diff_s)
         # notice that top_diff_s is carried along the constant error carousel
@@ -156,15 +156,15 @@ class LstmNode
 end
 
 class LstmNetwork
-	attr_accessor :lstm_param, :lstm_node_list, :x_list
+    attr_accessor :lstm_param, :lstm_node_list, :x_list
     def initialize(lstm_param)
         @lstm_param = lstm_param
         @lstm_node_list = []
         # input sequence
-	    @x_list = []
-	end
+	@x_list = []
+    end
 
-	def y_list_is(y_list, loss_layer)
+    def y_list_is(y_list, loss_layer)
         # """
         # Updates diffs by setting target sequence 
         # with corresponding loss layer. 
@@ -174,46 +174,46 @@ class LstmNetwork
 
         @lstm_param.apply_diff
 
-		# Provided by gem 'wrong'. You can roll your own, but this paints a nice report.
-		assert { (y_list.size) == (@x_list.size) }
+	# Provided by gem 'wrong'. You can roll your own, but this paints a nice report.
+	assert { (y_list.size) == (@x_list.size) }
 
-		idx = (@x_list.size) - 1
-		# first node only gets diffs from label ...
-		loss = loss_layer.loss(@lstm_node_list[idx].state.h, y_list[idx])
-		diff_h = loss_layer.bottom_diff(@lstm_node_list[idx].state.h, y_list[idx])
-		# here s is not affecting loss due to h(t+1), hence we set equal to zero
+	idx = (@x_list.size) - 1
+	# first node only gets diffs from label ...
+	loss = loss_layer.loss(@lstm_node_list[idx].state.h, y_list[idx])
+	diff_h = loss_layer.bottom_diff(@lstm_node_list[idx].state.h, y_list[idx])
+	# here s is not affecting loss due to h(t+1), hence we set equal to zero
         diff_s = Numo::DFloat.zeros(@lstm_param.mem_cell_ct)
         @lstm_node_list[idx].top_diff_is(diff_h, diff_s)
-		idx -= 1
+	idx -= 1
 
-		while idx >= 0
-			loss += loss_layer.loss(@lstm_node_list[idx].state.h, y_list[idx])
+	while idx >= 0
+	    loss += loss_layer.loss(@lstm_node_list[idx].state.h, y_list[idx])
             diff_h = loss_layer.bottom_diff(@lstm_node_list[idx].state.h, y_list[idx])
             diff_h += @lstm_node_list[idx + 1].state.bottom_diff_h
             diff_s = @lstm_node_list[idx + 1].state.bottom_diff_s
             @lstm_node_list[idx].top_diff_is(diff_h, diff_s)
-			idx -= 1 
-		end
-
-		loss
+	    idx -= 1 
 	end
 
-	def x_list_clear
-		@x_list = []
-	end
+	    loss
+    end
 
-	def x_list_add(x)
+    def x_list_clear
+	@x_list = []
+    end
+
+    def x_list_add(x)
         @x_list.push(x)
         if (@x_list.size) > (@lstm_node_list.size)
             # need to add new lstm node, create new state mem
             lstm_state = LstmState.new(@lstm_param.mem_cell_ct, @lstm_param.x_dim)      
-			@lstm_node_list.push(LstmNode.new(@lstm_param, lstm_state))
-		end
+	    @lstm_node_list.push(LstmNode.new(@lstm_param, lstm_state))
+	end
 
-		# get index of most recent x input
-		idx = (@x_list.size) - 1
+	# get index of most recent x input
+	idx = (@x_list.size) - 1
 
-		if idx.zero?
+	if idx.zero?
             # no recurrent inputs yet
             @lstm_node_list[idx].bottom_data_is(x)
         else
@@ -222,7 +222,7 @@ class LstmNetwork
             @lstm_node_list[idx].bottom_data_is(x, s_prev, h_prev)
         end
 
-	end
+    end
 
 end
 
@@ -261,8 +261,8 @@ class ToyLossLayer
     def self.bottom_diff(pred, label)
         diff = pred.new_zeros
         diff[0] = 2 * (pred[0] - label)
-		diff
-	end
+	diff
+    end
 end
 
 
